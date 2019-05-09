@@ -7,11 +7,16 @@
 #include <math.h>
 #include <ulog.h>  //必须在 LOG_TAG 与 LOG_LVL 下面
 
-#include "app_fun.h"
-#include "arm_math.h"
-
 #define ADC_INPUT_SIZE (8192U)
 #define _TEST_BUFF_SIZE (32U)
+
+struct adc_res
+{
+    uint16_t min;
+    uint16_t max;
+    uint16_t midle;
+    uint32_t sum;
+};
 
 ADC_HandleTypeDef hadc1;
 DMA_HandleTypeDef hdma_adc1;
@@ -76,7 +81,7 @@ static void MX_ADC1_Init(void)
      */
     sConfig.Channel      = ADC_CHANNEL_1;
     sConfig.Rank         = 1;
-    sConfig.SamplingTime = ADC_SAMPLETIME_144CYCLES;
+    sConfig.SamplingTime = ADC_SAMPLETIME_480CYCLES;
     if (HAL_ADC_ConfigChannel(&hadc1, &sConfig) != HAL_OK)
     {
         Error_Handler();
@@ -86,66 +91,53 @@ static void MX_ADC1_Init(void)
     /* USER CODE END ADC1_Init 2 */
 }
 
-/**
- * @brief TIM8 Initialization Function
- * @param None
+/*
+ * @brief  冒泡排序
+ * @param  [in]buf: 数组
+ * #param  [in]len: 长度
  * @retval None
  */
-static void MX_TIM8_Init(void)
+void sort(uint16_t* buff, uint32_t size)
 {
-    /* USER CODE BEGIN TIM8_Init 0 */
+    int i, j;
+    uint32_t t;
 
-    /* USER CODE END TIM8_Init 0 */
-
-    TIM_MasterConfigTypeDef sMasterConfig               = {0};
-    TIM_OC_InitTypeDef sConfigOC                        = {0};
-    TIM_BreakDeadTimeConfigTypeDef sBreakDeadTimeConfig = {0};
-
-    /* USER CODE BEGIN TIM8_Init 1 */
-
-    /* USER CODE END TIM8_Init 1 */
-    htim8.Instance               = TIM8;
-    htim8.Init.Prescaler         = 83;
-    htim8.Init.CounterMode       = TIM_COUNTERMODE_UP;
-    htim8.Init.Period            = 1999;
-    htim8.Init.ClockDivision     = TIM_CLOCKDIVISION_DIV1;
-    htim8.Init.RepetitionCounter = 0;
-    if (HAL_TIM_PWM_Init(&htim8) != HAL_OK)
+    if (size == 0) return;
+    //冒泡排序
+    for (i = 0; i < size - 1; i++)  // n个数的数列总共扫描n-1次
     {
-        Error_Handler();
+        for (j = 0; j < size - i - 1; j++)
+        {  //每一趟扫描到a[n-i-2]与a[n-i-1]比较为止结束
+            if (buff[j] < buff[j + 1])
+            {
+                t           = buff[j + 1];
+                buff[j + 1] = buff[j];
+                buff[j]     = t;
+            }
+        }
     }
-    sMasterConfig.MasterOutputTrigger = TIM_TRGO_RESET;
-    sMasterConfig.MasterSlaveMode     = TIM_MASTERSLAVEMODE_DISABLE;
-    if (HAL_TIMEx_MasterConfigSynchronization(&htim8, &sMasterConfig) != HAL_OK)
-    {
-        Error_Handler();
-    }
-    sConfigOC.OCMode       = TIM_OCMODE_PWM1;
-    sConfigOC.Pulse        = 999;
-    sConfigOC.OCPolarity   = TIM_OCPOLARITY_HIGH;
-    sConfigOC.OCNPolarity  = TIM_OCNPOLARITY_HIGH;
-    sConfigOC.OCFastMode   = TIM_OCFAST_DISABLE;
-    sConfigOC.OCIdleState  = TIM_OCIDLESTATE_RESET;
-    sConfigOC.OCNIdleState = TIM_OCNIDLESTATE_RESET;
-    if (HAL_TIM_PWM_ConfigChannel(&htim8, &sConfigOC, TIM_CHANNEL_2) != HAL_OK)
-    {
-        Error_Handler();
-    }
-    sBreakDeadTimeConfig.OffStateRunMode  = TIM_OSSR_DISABLE;
-    sBreakDeadTimeConfig.OffStateIDLEMode = TIM_OSSI_DISABLE;
-    sBreakDeadTimeConfig.LockLevel        = TIM_LOCKLEVEL_OFF;
-    sBreakDeadTimeConfig.DeadTime         = 0;
-    sBreakDeadTimeConfig.BreakState       = TIM_BREAK_DISABLE;
-    sBreakDeadTimeConfig.BreakPolarity    = TIM_BREAKPOLARITY_HIGH;
-    sBreakDeadTimeConfig.AutomaticOutput  = TIM_AUTOMATICOUTPUT_DISABLE;
-    if (HAL_TIMEx_ConfigBreakDeadTime(&htim8, &sBreakDeadTimeConfig) != HAL_OK)
-    {
-        Error_Handler();
-    }
-    /* USER CODE BEGIN TIM8_Init 2 */
+}
 
-    /* USER CODE END TIM8_Init 2 */
-    HAL_TIM_MspPostInit(&htim8);
+/**
+ * @brief  找出数组中相关信息
+ * @param  [in]buf: 数组
+ * @param  [in]len: 长度
+ * @param  [out]res: 结果
+ * @return None
+ */
+static void find_the_result(uint16_t* buf, uint32_t len, struct adc_res* res)
+{
+    sort(buf, len);
+
+    res->min   = buf[0];
+    res->max   = buf[len - 1];
+    res->midle = buf[len / 2];
+
+    res->sum = 0;
+    for (int i = 0; i < len; i++)
+    {
+        res->sum = buf[i];
+    }
 }
 
 /**
@@ -155,50 +147,32 @@ static void MX_TIM8_Init(void)
  */
 static void fft_thread(void* parameter)
 {
-    /* fft初始化信息 */
-    arm_rfft_instance_q15 S;
     /* CCM内存池 */
     struct rt_memheap* ccm_space =
         (struct rt_memheap*)rt_object_find("ccm", RT_Object_Class_MemHeap);
     /* sdma信号量 */
-    // rt_sem_t sem           = (rt_sem_t)rt_object_find("sdma", RT_Object_Class_Semaphore);
-    void* output_pool      = RT_NULL;
-    q15_t* int_point       = RT_NULL;
-    float32_t* float_point = RT_NULL;
+    void* mem_pool     = RT_NULL;
+    uint16_t* buf_pool = RT_NULL;
+    struct adc_res res;
 
     /* 变量检查 */
-    // RT_ASSERT(sem != RT_NULL);
     RT_ASSERT(ccm_space != RT_NULL)
     /* 申请内存 */
-    output_pool = (void*)rt_memheap_alloc(ccm_space, ADC_INPUT_SIZE * sizeof(q15_t) * 2);
-    RT_ASSERT(output_pool != RT_NULL);
-    /* int_point 指向内存池头 类型用于处理整数
-       float_point 指向内存池头 类型用于浮点数处理*/
-    int_point   = (q15_t*)output_pool;
-    float_point = (float32_t*)output_pool;
+    mem_pool = (void*)rt_memheap_alloc(ccm_space, ADC_INPUT_SIZE * sizeof(uint16_t));
+    RT_ASSERT(mem_pool != RT_NULL);
+    /* buf_pool 指向内存池头 类型用于处理整数 */
+    buf_pool = (uint16_t*)mem_pool;
 
     while (1)
     {
         /* 等待DMA完成中断 */
         rt_sem_take(sem, RT_WAITING_FOREVER);
-        /* 初始变换且检查 */
-        RT_ASSERT(arm_rfft_init_q15(&S, ADC_INPUT_SIZE, 0, 1) == ARM_MATH_SUCCESS);
-        arm_rfft_q15(&S, (q15_t*)adc_input_buff, int_point);
-        /* 结果取模并转为小数 */
-        for (uint32_t i = 0; i < ADC_INPUT_SIZE; i++)
-        {
-            double tmp = 0;
-            tmp = pow((double)*(int_point + 2 * i), 2) + pow((double)*(int_point + 2 * i + 1), 2);
-            *(float_point + i) = (float32_t)sqrt(tmp);
-        }
 
-        for (uint32_t i = 0; i < ADC_INPUT_SIZE / 2; i++)
-        {
-            if (*(float_point + i) > 20)
-            {
-                rt_kprintf("[%4d]: %d\n", i, (int32_t) * (float_point + i));
-            }
-        }
+        find_the_result(buf_pool, ADC_INPUT_SIZE, &res);
+        rt_kprintf("res.min=%d,\nres.max=%d,\nres.midle=%d\nres.sum=%d\n", res.min, res.max,
+                   res.midle, res.sum);
+
+        rt_memset(mem_pool, 0, ADC_INPUT_SIZE * sizeof(uint16_t));
         rt_thread_delay(RT_TICK_PER_SECOND);
         HAL_ADC_Start_DMA(&hadc1, (uint32_t*)adc_input_buff, ADC_INPUT_SIZE);
     }
@@ -219,9 +193,6 @@ int adc_dma_init(void)
 
     MX_ADC1_Init();
     MX_DMA_Init();
-    /* 产生PWM */
-    MX_TIM8_Init();
-    HAL_TIM_PWM_Start(&htim8, TIM_CHANNEL_2);
 
     /* 创建dma通知信号量 */
     sem = rt_sem_create("sdma", 0, RT_IPC_FLAG_PRIO);

@@ -4,6 +4,8 @@ from building import *
 cwd     = GetCurrentDir()
 CPPPATH = [cwd, str(Dir('#'))]
 src     = Split("""
+adc_dma.c
+board_ad9959.c
 main.c
 """)
 
