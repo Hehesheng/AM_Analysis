@@ -5,7 +5,7 @@ cwd     = GetCurrentDir()
 CPPPATH = [cwd, str(Dir('#'))]
 src     = Split("""
 adc_dma.c
-board_ad9959.c
+board_adf4351.c
 main.c
 """)
 
