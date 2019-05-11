@@ -11,25 +11,25 @@
 #define FREQ_TO_MHZ(x) (x * 1000)
 #define FREQ_TO_KHZ(x) (x)
 
-uint16_t adf_R        = 1;  // RF参考分频系数
-uint8_t adf_D         = 0;  // RF REFin倍频器位(0 or 1)
-uint8_t adf_T         = 0;  //参考二分频位,产生占空比50%,减少周跳
-uint16_t adf_Locktime = 160;
-uint16_t adf_MOD      = 1;
-uint16_t adf_INT      = 256;
-uint16_t adf_FRAC     = 0;
-uint16_t adf_PHASE    = 1;
-uint8_t adf_DIV       = RF_div32;
+// uint32_t adf_R        = 1;  // RF参考分频系数
+// uint32_t adf_D        = 0;  // RF REFin倍频器位(0 or 1)
+// uint32_t adf_T        = 0;  //参考二分频位,产生占空比50%,减少周跳
+// uint32_t adf_Locktime = 8;
+// uint32_t adf_MOD      = 4095;
+// uint32_t adf_INT      = 256;
+// uint32_t adf_FRAC     = 0;
+// uint32_t adf_PHASE    = 1;
+// uint32_t adf_DIV      = RF_div32;
 
 // uint16_t adf_R        = 1;  // RF参考分频系数
-// uint8_t adf_D         = 0;  // RF REFin倍频器位(0 or 1)
-// uint8_t adf_T         = 0;  //参考二分频位,产生占空比50%,减少周跳
+// uint32_t adf_D         = 0;  // RF REFin倍频器位(0 or 1)
+// uint32_t adf_T         = 0;  //参考二分频位,产生占空比50%,减少周跳
 // uint16_t adf_Locktime = 160;
 // uint16_t adf_MOD      = 1;
 // uint16_t adf_INT      = 256;
 // uint16_t adf_FRAC     = 0;
 // uint16_t adf_PHASE    = 1;
-// uint8_t adf_DIV       = RF_div32;
+// uint32_t adf_DIV       = RF_div32;
 
 /**
  * @author    vfhky 2015.05.30 https://typecodes.com/cseries/simplifychexstrtoint.html
@@ -143,6 +143,16 @@ int adf4351_init(void)
 {
     uint32_t adf_data = 0;
 
+    uint32_t adf_R        = 1;  // RF参考分频系数
+    uint32_t adf_D        = 0;  // RF REFin倍频器位(0 or 1)
+    uint32_t adf_T        = 0;  //参考二分频位,产生占空比50%,减少周跳
+    uint32_t adf_Locktime = 8;
+    uint32_t adf_MOD      = 4095;
+    uint32_t adf_INT      = 256;
+    uint32_t adf_FRAC     = 0;
+    uint32_t adf_PHASE    = 1;
+    uint32_t adf_DIV      = RF_div32;
+
     adf4351_gpio_init();
 
     //配置寄存器5
@@ -156,14 +166,15 @@ int adf4351_init(void)
     可修改RF divider, R的值(DB22-20)the RF divider is 32;
     (DB11=0)VCO powerd up;	辅助RF输出禁用; 频段选择时钟,分频至125k,
     分频值160*/
-    adf_data = adf_data | (RF_div32 << 20);  // RF divider is 32
-    adf_data = adf_data | (160 << 12);       //频段选择时钟
-    adf_data = adf_data | ADF_R4;            //(DB5=1)RF output is enabled;(DB4-3=3H)Output power
-                                             // level is 5dBm
+    adf_data = adf_data | (adf_DIV << 20);  // RF divider is 32
+    adf_data = adf_data | (160 << 12);      //频段选择时钟
+    adf_data = adf_data | ADF_R4;           //(DB5=1)RF output is enabled;(DB4-3=3H)Output power
+                                            // level is 5dBm
     adf4351_write(adf_data);
 
     //配置寄存器3
     adf_data = 0x00848000;
+    // adf_data = 0x00000000;
     /*选择高频段（D23=1）, APB6ns(D22=0,=建议小数分频使用),,(D21=0,小数分频使用)
     使能CSR(D18=1),(D16 D15=01)快速锁定 可修改clock divider value的值*/
     adf_data = adf_data | (adf_Locktime << 3);
@@ -172,6 +183,7 @@ int adf4351_init(void)
 
     //配置寄存器2
     adf_data = 0x61002040;
+    // adf_data = 0x00000E40;
     //低杂散输出, 禁用参考倍频, 二分频触发器使能(减少周跳必须)
     //使能双缓冲器, 设置电荷磅电流0.31, 小数N分频(40), 设置R分频器的值为1
     //设置鉴相器的极性, (DB6)同向滤波器1,反向滤波器0,这里用同向滤波器
@@ -183,6 +195,7 @@ int adf4351_init(void)
 
     //配置寄存器1
     adf_data = 0x01008000;
+    // adf_data = 0x08000000;
     //禁用相位调整,预分频器的值为8/9
     //相位字为1
     adf_data = adf_data | (adf_PHASE << 15);
@@ -262,8 +275,8 @@ static int adf4351_set_dive(uint32_t freq, struct adf4351_clock* clock)
     /* 得整数部分 */
     clock->INT = (uint16_t)compare;
     /* 小数部分 */
-    // clock->FRAC = (uint16_t)((compare - clock->INT) * 4096);
-    clock->MOD = 1;
+    clock->FRAC = (uint16_t)((compare - clock->INT) * 4096.0);
+    // clock->MOD  = 4095;
 
     return 0;
 }
@@ -277,6 +290,16 @@ void adf4351_set_freq(uint32_t freq)
 {
     uint32_t adf_data = 0;
 
+    uint32_t adf_R        = 1;  // RF参考分频系数
+    uint32_t adf_D        = 0;  // RF REFin倍频器位(0 or 1)
+    uint32_t adf_T        = 0;  //参考二分频位,产生占空比50%,减少周跳
+    uint32_t adf_Locktime = 8;
+    uint32_t adf_MOD      = 4095;
+    uint32_t adf_INT      = 256;
+    uint32_t adf_FRAC     = 0;
+    uint32_t adf_PHASE    = 1;
+    uint32_t adf_DIV      = RF_div32;
+
     struct adf4351_clock clock_cfg = {0};
 
     if (adf4351_set_dive(freq, &clock_cfg))
@@ -285,9 +308,9 @@ void adf4351_set_freq(uint32_t freq)
         return;
     }
 
-    adf_DIV = clock_cfg.DIV;
-    adf_INT = clock_cfg.INT;
-    // adf_FRAC = clock_cfg.FRAC;
+    adf_DIV  = clock_cfg.DIV;
+    adf_INT  = clock_cfg.INT;
+    adf_FRAC = clock_cfg.FRAC;
     // adf_MOD  = clock_cfg.MOD;
 
     adf4351_gpio_init();
@@ -303,14 +326,15 @@ void adf4351_set_freq(uint32_t freq)
     可修改RF divider, R的值(DB22-20)the RF divider is 32;
     (DB11=0)VCO powerd up;	辅助RF输出禁用; 频段选择时钟,分频至125k,
     分频值160*/
-    adf_data = adf_data | (RF_div32 << 20);  // RF divider is 32
-    adf_data = adf_data | (160 << 12);       //频段选择时钟
-    adf_data = adf_data | ADF_R4;            //(DB5=1)RF output is enabled;(DB4-3=3H)Output power
-                                             // level is 5dBm
+    adf_data = adf_data | (adf_DIV << 20);  // RF divider is 32
+    adf_data = adf_data | (160 << 12);      //频段选择时钟
+    adf_data = adf_data | ADF_R4;           //(DB5=1)RF output is enabled;(DB4-3=3H)Output power
+                                            // level is 5dBm
     adf4351_write(adf_data);
 
     //配置寄存器3
     adf_data = 0x00848000;
+    // adf_data = 0x00000000;
     /*选择高频段（D23=1）, APB6ns(D22=0,=建议小数分频使用),,(D21=0,小数分频使用)
     使能CSR(D18=1),(D16 D15=01)快速锁定 可修改clock divider value的值*/
     adf_data = adf_data | (adf_Locktime << 3);
@@ -319,6 +343,7 @@ void adf4351_set_freq(uint32_t freq)
 
     //配置寄存器2
     adf_data = 0x61002040;
+    // adf_data = 0x00000E40;
     //低杂散输出, 禁用参考倍频, 二分频触发器使能(减少周跳必须)
     //使能双缓冲器, 设置电荷磅电流0.31, 小数N分频(40), 设置R分频器的值为1
     //设置鉴相器的极性, (DB6)同向滤波器1,反向滤波器0,这里用同向滤波器
@@ -330,6 +355,7 @@ void adf4351_set_freq(uint32_t freq)
 
     //配置寄存器1
     adf_data = 0x01008000;
+    // adf_data = 0x08000000;
     //禁用相位调整,预分频器的值为8/9
     //相位字为1
     adf_data = adf_data | (adf_PHASE << 15);
@@ -346,18 +372,21 @@ void adf4351_set_freq(uint32_t freq)
 }
 
 #include <stdlib.h>
-void adf4351_test(int argc, char** argv)
+static void adf4351_test(int argc, char** argv)
 {
     if (argc > 1)
     {
         uint32_t freq = atoi(argv[1]);
-        log_d("input freq: %d MHz", freq / 1000);
+        log_d("input freq: %d MHz", freq);
         // freq *= 1000;
-        adf4351_set_freq(freq);
+        adf4351_set_freq(freq * 1000);
     }
     else
     {
-        log_w("lost argv, like \"adf_freq 200000 \"");
+        log_w("lost argv, like \"adf_freq 2000 \"");
     }
 }
-MSH_CMD_EXPORT_ALIAS(adf4351_test, adf_freq, freq x 1000 : adf_freq<freq>);
+MSH_CMD_EXPORT_ALIAS(adf4351_test, adf_freq, freq Mhz : adf_freq<freq>);
+
+static void adf4351_init_test(void) { adf4351_init(); }
+MSH_CMD_EXPORT_ALIAS(adf4351_init_test, adf_init, testesetss);

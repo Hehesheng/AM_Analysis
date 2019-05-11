@@ -105,7 +105,7 @@ static int hw_sram_init(void)
 
     return RT_EOK;
 }
-INIT_BOARD_EXPORT(hw_sram_init);
+// INIT_BOARD_EXPORT(hw_sram_init);
 
 #ifdef SRAM_DEBUG
 #ifdef FINSH_USING_MSH

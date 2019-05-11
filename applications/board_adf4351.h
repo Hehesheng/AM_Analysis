@@ -56,14 +56,14 @@
 /* REF_IN = 25M, R = 1, D = 0, T = 0 -> f_PFD = 25M */
 struct adf4351_clock
 {
-    uint16_t R;     // [0:9] RF参考分频系数 (1)
-    uint8_t D;      // (0 or 1) RF REFin倍频器位 (0)
-    uint8_t T;      // (0 or 1) 参考二分频位,产生占空比50%,减少周跳 (0)
-    uint8_t DIV;    // [0-6] (32)
-    uint16_t INT;   // [0:15] (256)
-    uint16_t FRAC;  // [0:9] (0)
-    uint16_t MOD;   // [0:11] (1)
-    // uint16_t Locktime;
+    uint32_t R;     // [0:9] RF参考分频系数 (1)
+    uint32_t D;      // (0 or 1) RF REFin倍频器位 (0)
+    uint32_t T;      // (0 or 1) 参考二分频位,产生占空比50%,减少周跳 (0)
+    uint32_t DIV;    // [0-6] (32)
+    uint32_t INT;   // [0:15] (256)
+    uint32_t FRAC;  // [0:9] (0)
+    uint32_t MOD;   // [0:11] (1)
+    // uint32_t Locktime;
 };
 
 int adf4351_init(void);
