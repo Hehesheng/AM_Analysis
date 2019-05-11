@@ -7,7 +7,7 @@
 #include <math.h>
 #include <ulog.h>  //必须在 LOG_TAG 与 LOG_LVL 下面
 
-#define ADC_INPUT_SIZE (8192U)
+#define ADC_INPUT_SIZE (2048U)
 #define _TEST_BUFF_SIZE (32U)
 
 struct adc_res
@@ -16,6 +16,7 @@ struct adc_res
     uint16_t max;
     uint16_t midle;
     uint32_t sum;
+    uint32_t ave;
 };
 
 ADC_HandleTypeDef hadc1;
@@ -23,6 +24,7 @@ DMA_HandleTypeDef hdma_adc1;
 TIM_HandleTypeDef htim8;
 
 static rt_sem_t sem                           = RT_NULL;
+static rt_sem_t out_switch                    = RT_NULL;
 static int16_t adc_input_buff[ADC_INPUT_SIZE] = {0};
 
 extern void HAL_TIM_MspPostInit(TIM_HandleTypeDef* htim);
@@ -129,15 +131,16 @@ static void find_the_result(uint16_t* buf, uint32_t len, struct adc_res* res)
 {
     sort(buf, len);
 
-    res->min   = buf[0];
-    res->max   = buf[len - 1];
+    res->max   = buf[0];
+    res->min   = buf[len - 1];
     res->midle = buf[len / 2];
 
     res->sum = 0;
     for (int i = 0; i < len; i++)
     {
-        res->sum = buf[i];
+        res->sum += buf[i];
     }
+    res->ave = res->sum / len;
 }
 
 /**
@@ -155,25 +158,36 @@ static void fft_thread(void* parameter)
     uint16_t* buf_pool = RT_NULL;
     struct adc_res res;
 
-    /* 变量检查 */
-    RT_ASSERT(ccm_space != RT_NULL)
-    /* 申请内存 */
-    mem_pool = (void*)rt_memheap_alloc(ccm_space, ADC_INPUT_SIZE * sizeof(uint16_t));
-    RT_ASSERT(mem_pool != RT_NULL);
-    /* buf_pool 指向内存池头 类型用于处理整数 */
-    buf_pool = (uint16_t*)mem_pool;
+    // /* 变量检查 */
+    // RT_ASSERT(ccm_space != RT_NULL)
+    // /* 申请内存 */
+    // mem_pool = (void*)rt_memheap_alloc(ccm_space, ADC_INPUT_SIZE * sizeof(uint16_t));
+    // RT_ASSERT(mem_pool != RT_NULL);
+    // /* buf_pool 指向内存池头 类型用于处理整数 */
+    // buf_pool = (uint16_t*)mem_pool;
 
     while (1)
     {
         /* 等待DMA完成中断 */
         rt_sem_take(sem, RT_WAITING_FOREVER);
 
-        find_the_result(buf_pool, ADC_INPUT_SIZE, &res);
-        rt_kprintf("res.min=%d,\nres.max=%d,\nres.midle=%d\nres.sum=%d\n", res.min, res.max,
-                   res.midle, res.sum);
+        find_the_result(adc_input_buff, ADC_INPUT_SIZE, &res);
 
-        rt_memset(mem_pool, 0, ADC_INPUT_SIZE * sizeof(uint16_t));
-        rt_thread_delay(RT_TICK_PER_SECOND);
+        if (rt_sem_trytake(out_switch) == RT_EOK)
+        {
+            rt_kprintf(
+                "===begin===\n"
+                "res.min=%d,\n"
+                "res.max=%d,\n"
+                "res.midle=%d,\n"
+                "res.sum=%d,\n"
+                "res.ave=%d,\n",
+                res.min, res.max, res.midle, res.sum, res.ave);
+            rt_sem_release(out_switch);
+        }
+
+        rt_memset(adc_input_buff, 0, ADC_INPUT_SIZE * sizeof(uint16_t));
+        rt_thread_delay(RT_TICK_PER_SECOND / 2);
         HAL_ADC_Start_DMA(&hadc1, (uint32_t*)adc_input_buff, ADC_INPUT_SIZE);
     }
 }
@@ -200,6 +214,13 @@ int adc_dma_init(void)
     {
         log_w("sem create fail!!");
     }
+    /* 创建调制深度通知信号量 */
+    out_switch = rt_sem_create("sout", 0, RT_IPC_FLAG_PRIO);
+    if (out_switch == RT_NULL)
+    {
+        log_w("out_switch create fail!!");
+    }
+    HAL_ADC_Start_DMA(&hadc1, (uint32_t*)adc_input_buff, ADC_INPUT_SIZE);
 
     rt_thread_t tid = rt_thread_create("tfft", fft_thread, RT_NULL, 8192, 25, 20);
     RT_ASSERT(tid != RT_NULL);
@@ -242,3 +263,27 @@ static void dma_control(int argc, char** argv)
     HAL_ADC_Start_DMA(&hadc1, (uint32_t*)adc_input_buff, ADC_INPUT_SIZE);
 }
 MSH_CMD_EXPORT(dma_control, begin dma);
+
+static void switch_out(int argc, char** argv)
+{
+    if (argc > 1)
+    {
+        if (rt_strcmp(argv[1], "on") == 0 && out_switch->value == 0)
+        {
+            rt_sem_release(out_switch);
+        }
+        else if (rt_strcmp(argv[1], "off") == 0 && out_switch->value == 1)
+        {
+            rt_sem_take(out_switch, RT_WAITING_FOREVER);
+        }
+        else
+        {
+            log_w("error cmd, ->value: %d", out_switch->value);
+        }
+    }
+    else
+    {
+        log_w("error input, cmd like: switch_out <on|off>");
+    }
+}
+MSH_CMD_EXPORT(switch_out, switch_out<on | off>);

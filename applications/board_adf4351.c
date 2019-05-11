@@ -10,6 +10,7 @@
 
 #define FREQ_TO_MHZ(x) (x * 1000)
 #define FREQ_TO_KHZ(x) (x)
+#define START_INIT_FREQ (90001)
 
 // uint32_t adf_R        = 1;  // RF参考分频系数
 // uint32_t adf_D        = 0;  // RF REFin倍频器位(0 or 1)
@@ -146,7 +147,7 @@ int adf4351_init(void)
     uint32_t adf_R        = 1;  // RF参考分频系数
     uint32_t adf_D        = 0;  // RF REFin倍频器位(0 or 1)
     uint32_t adf_T        = 0;  //参考二分频位,产生占空比50%,减少周跳
-    uint32_t adf_Locktime = 8;
+    uint32_t adf_Locktime = 160;
     uint32_t adf_MOD      = 4095;
     uint32_t adf_INT      = 256;
     uint32_t adf_FRAC     = 0;
@@ -209,6 +210,8 @@ int adf4351_init(void)
     adf_data = adf_data | (adf_FRAC << 3);
     adf_data = adf_data | ADF_R0;
     adf4351_write(adf_data);
+
+    adf4351_set_freq(START_INIT_FREQ);
 
     log_i("ADF4351 init success");
 
@@ -293,7 +296,7 @@ void adf4351_set_freq(uint32_t freq)
     uint32_t adf_R        = 1;  // RF参考分频系数
     uint32_t adf_D        = 0;  // RF REFin倍频器位(0 or 1)
     uint32_t adf_T        = 0;  //参考二分频位,产生占空比50%,减少周跳
-    uint32_t adf_Locktime = 8;
+    uint32_t adf_Locktime = 160;
     uint32_t adf_MOD      = 4095;
     uint32_t adf_INT      = 256;
     uint32_t adf_FRAC     = 0;
@@ -377,9 +380,9 @@ static void adf4351_test(int argc, char** argv)
     if (argc > 1)
     {
         uint32_t freq = atoi(argv[1]);
-        log_d("input freq: %d MHz", freq);
+        log_d("input freq: %d MHz", freq / 1000);
         // freq *= 1000;
-        adf4351_set_freq(freq * 1000);
+        adf4351_set_freq(freq);
     }
     else
     {

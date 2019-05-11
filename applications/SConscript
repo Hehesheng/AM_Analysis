@@ -7,6 +7,8 @@ src     = Split("""
 adc_dma.c
 board_adf4351.c
 main.c
+hmi_cmd.c
+hmi.c
 """)
 
 group = DefineGroup('Applications', src, depend = [''], CPPPATH = CPPPATH)
