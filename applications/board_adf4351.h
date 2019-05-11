@@ -53,7 +53,7 @@
 /* RF_OUT = [INT + (FRAC/MOD)] × (f_PFD / DIV) */
 /* f_PFD = REF_IN × [(1 + D)/(R × (1 + T))] */
 /* RF_OUT = [INT + (FRAC/MOD)] × (REF_IN × [(1 + D)/(R × (1 + T))] / DIV) */
-/* REF_IN = 25M, R = 1, D = 0, T = 0 -> f_PFD = 12.5M */
+/* REF_IN = 25M, R = 1, D = 0, T = 0 -> f_PFD = 25M */
 struct adf4351_clock
 {
     uint16_t R;     // [0:9] RF参考分频系数 (1)
@@ -66,7 +66,7 @@ struct adf4351_clock
     // uint16_t Locktime;
 };
 
-int ADF4351_Init(void);
+int adf4351_init(void);
 void adf4351_set_freq(uint32_t freq);
 
 #endif  // __BOARD_ADF4351_H__

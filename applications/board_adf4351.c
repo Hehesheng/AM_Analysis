@@ -11,6 +11,26 @@
 #define FREQ_TO_MHZ(x) (x * 1000)
 #define FREQ_TO_KHZ(x) (x)
 
+uint16_t adf_R        = 1;  // RF参考分频系数
+uint8_t adf_D         = 0;  // RF REFin倍频器位(0 or 1)
+uint8_t adf_T         = 0;  //参考二分频位,产生占空比50%,减少周跳
+uint16_t adf_Locktime = 160;
+uint16_t adf_MOD      = 1;
+uint16_t adf_INT      = 256;
+uint16_t adf_FRAC     = 0;
+uint16_t adf_PHASE    = 1;
+uint8_t adf_DIV       = RF_div32;
+
+// uint16_t adf_R        = 1;  // RF参考分频系数
+// uint8_t adf_D         = 0;  // RF REFin倍频器位(0 or 1)
+// uint8_t adf_T         = 0;  //参考二分频位,产生占空比50%,减少周跳
+// uint16_t adf_Locktime = 160;
+// uint16_t adf_MOD      = 1;
+// uint16_t adf_INT      = 256;
+// uint16_t adf_FRAC     = 0;
+// uint16_t adf_PHASE    = 1;
+// uint8_t adf_DIV       = RF_div32;
+
 /**
  * @author    vfhky 2015.05.30 https://typecodes.com/cseries/simplifychexstrtoint.html
  * @param     [in]HexStr 十六进制字符串（例如"eE2"、"Fa1"、"2011"、"-eE2"、"+eE2"等）
@@ -67,7 +87,7 @@ int HexStr2Integer(char* HexStr, int* res)
  * @arg    None
  * @retval None
  */
-static void ADF4351_GPIO_Init(void)
+static void adf4351_gpio_init(void)
 {
     GPIO_InitTypeDef GPIO_InitStruct = {0};
 
@@ -90,7 +110,7 @@ static void ADF4351_GPIO_Init(void)
  * @arg    数据
  * @retval None
  */
-static void ADF4351_Write(uint32_t data)
+static void adf4351_write(uint32_t data)
 {
     uint8_t i;
 
@@ -119,24 +139,16 @@ static void ADF4351_Write(uint32_t data)
  * @param  None
  * @return None
  */
-int ADF4351_Init(void)
+int adf4351_init(void)
 {
-    uint32_t adf_data     = 0;
-    uint16_t adf_R        = 1;  // RF参考分频系数
-    uint8_t adf_D         = 0;  // RF REFin倍频器位(0 or 1)
-    uint8_t adf_T         = 0;  //参考二分频位,产生占空比50%,减少周跳
-    uint16_t adf_Locktime = 160;
-    uint16_t adf_MOD      = 1;
-    uint16_t adf_INT      = 256;
-    uint16_t adf_FRAC     = 0;
-    uint16_t adf_PHASE    = 1;
+    uint32_t adf_data = 0;
 
-    ADF4351_GPIO_Init();
+    adf4351_gpio_init();
 
     //配置寄存器5
     adf_data = 0x00580000;  //数字锁存   LD引脚的工作方式为数字锁存   D23 D22=01
     adf_data = adf_data | ADF_R5;
-    ADF4351_Write(adf_data);
+    adf4351_write(adf_data);
 
     //配置寄存器4
     adf_data = 0x00800038;
@@ -148,7 +160,7 @@ int ADF4351_Init(void)
     adf_data = adf_data | (160 << 12);       //频段选择时钟
     adf_data = adf_data | ADF_R4;            //(DB5=1)RF output is enabled;(DB4-3=3H)Output power
                                              // level is 5dBm
-    ADF4351_Write(adf_data);
+    adf4351_write(adf_data);
 
     //配置寄存器3
     adf_data = 0x00848000;
@@ -156,7 +168,7 @@ int ADF4351_Init(void)
     使能CSR(D18=1),(D16 D15=01)快速锁定 可修改clock divider value的值*/
     adf_data = adf_data | (adf_Locktime << 3);
     adf_data = adf_data | ADF_R3;
-    ADF4351_Write(adf_data);
+    adf4351_write(adf_data);
 
     //配置寄存器2
     adf_data = 0x61002040;
@@ -167,7 +179,7 @@ int ADF4351_Init(void)
     adf_data = adf_data | (adf_T << 24);
     adf_data = adf_data | (adf_R << 14);
     adf_data = adf_data | ADF_R2;
-    ADF4351_Write(adf_data);
+    adf4351_write(adf_data);
 
     //配置寄存器1
     adf_data = 0x01008000;
@@ -176,20 +188,20 @@ int ADF4351_Init(void)
     adf_data = adf_data | (adf_PHASE << 15);
     adf_data = adf_data | (adf_MOD << 3);
     adf_data = adf_data | ADF_R1;
-    ADF4351_Write(adf_data);
+    adf4351_write(adf_data);
 
     //配置寄存器0
     adf_data = 0x00000000;
     adf_data = adf_data | (adf_INT << 15);
     adf_data = adf_data | (adf_FRAC << 3);
     adf_data = adf_data | ADF_R0;
-    ADF4351_Write(adf_data);
+    adf4351_write(adf_data);
 
     log_i("ADF4351 init success");
 
     return 0;
 }
-INIT_DEVICE_EXPORT(ADF4351_Init);
+INIT_APP_EXPORT(adf4351_init);
 
 /**
  * @brief  获取分频系数
@@ -202,7 +214,7 @@ static int adf4351_set_dive(uint32_t freq, struct adf4351_clock* clock)
     uint32_t f_PFD = ADF4351_F_PFD_FREQ / 1000;
     double compare = 0;
 
-    if (freq < ADF4351_MIN_FRE || freq > ADF4351_MAX_FRE)
+    if ((freq * 1000) < ADF4351_MIN_FRE || freq > ADF4351_MAX_FRE)
     {
         log_w("error freq input!");
         return -1;
@@ -250,8 +262,8 @@ static int adf4351_set_dive(uint32_t freq, struct adf4351_clock* clock)
     /* 得整数部分 */
     clock->INT = (uint16_t)compare;
     /* 小数部分 */
-    clock->FRAC = (uint16_t)((compare - clock->INT) * 4096);
-    clock->MOD  = 4095;
+    // clock->FRAC = (uint16_t)((compare - clock->INT) * 4096);
+    clock->MOD = 1;
 
     return 0;
 }
@@ -263,42 +275,39 @@ static int adf4351_set_dive(uint32_t freq, struct adf4351_clock* clock)
  */
 void adf4351_set_freq(uint32_t freq)
 {
-    uint32_t adf_data     = 0;
-    uint16_t adf_R        = 1;  // RF参考分频系数
-    uint8_t adf_D         = 0;  // RF REFin倍频器位(0 or 1)
-    uint8_t adf_T         = 0;  //参考二分频位,产生占空比50%,减少周跳
-    uint16_t adf_Locktime = 160;
-    uint16_t adf_MOD      = 1;
-    uint16_t adf_INT      = 256;
-    uint16_t adf_FRAC     = 0;
-    uint16_t adf_PHASE    = 1;
-    uint8_t adf_DIV       = RF_div32;
+    uint32_t adf_data = 0;
 
     struct adf4351_clock clock_cfg = {0};
 
-    adf4351_set_dive(freq, &clock_cfg);
+    if (adf4351_set_dive(freq, &clock_cfg))
+    {
+        log_e("set freq fail!");
+        return;
+    }
 
-    adf_DIV  = clock_cfg.DIV;
-    adf_INT  = clock_cfg.INT;
-    adf_FRAC = clock_cfg.FRAC;
-    adf_MOD  = clock_cfg.MOD;
+    adf_DIV = clock_cfg.DIV;
+    adf_INT = clock_cfg.INT;
+    // adf_FRAC = clock_cfg.FRAC;
+    // adf_MOD  = clock_cfg.MOD;
+
+    adf4351_gpio_init();
 
     //配置寄存器5
     adf_data = 0x00580000;  //数字锁存   LD引脚的工作方式为数字锁存   D23 D22=01
     adf_data = adf_data | ADF_R5;
-    ADF4351_Write(adf_data);
+    adf4351_write(adf_data);
 
     //配置寄存器4
     adf_data = 0x00800038;
     /*(DB23=1)The signal is taken from the VCO directly,信号直接从VCO获得
-    可修改RF divider, R的值(DB22-20)the RF divider
+    可修改RF divider, R的值(DB22-20)the RF divider is 32;
     (DB11=0)VCO powerd up;	辅助RF输出禁用; 频段选择时钟,分频至125k,
     分频值160*/
-    adf_data = adf_data | (adf_DIV << 20);  // RF divider
-    adf_data = adf_data | (160 << 12);      //频段选择时钟
-    adf_data = adf_data | ADF_R4;           //(DB5=1)RF output is enabled;(DB4-3=3H)Output power
-                                            // level is 5dBm
-    ADF4351_Write(adf_data);
+    adf_data = adf_data | (RF_div32 << 20);  // RF divider is 32
+    adf_data = adf_data | (160 << 12);       //频段选择时钟
+    adf_data = adf_data | ADF_R4;            //(DB5=1)RF output is enabled;(DB4-3=3H)Output power
+                                             // level is 5dBm
+    adf4351_write(adf_data);
 
     //配置寄存器3
     adf_data = 0x00848000;
@@ -306,7 +315,7 @@ void adf4351_set_freq(uint32_t freq)
     使能CSR(D18=1),(D16 D15=01)快速锁定 可修改clock divider value的值*/
     adf_data = adf_data | (adf_Locktime << 3);
     adf_data = adf_data | ADF_R3;
-    ADF4351_Write(adf_data);
+    adf4351_write(adf_data);
 
     //配置寄存器2
     adf_data = 0x61002040;
@@ -317,7 +326,7 @@ void adf4351_set_freq(uint32_t freq)
     adf_data = adf_data | (adf_T << 24);
     adf_data = adf_data | (adf_R << 14);
     adf_data = adf_data | ADF_R2;
-    ADF4351_Write(adf_data);
+    adf4351_write(adf_data);
 
     //配置寄存器1
     adf_data = 0x01008000;
@@ -326,14 +335,14 @@ void adf4351_set_freq(uint32_t freq)
     adf_data = adf_data | (adf_PHASE << 15);
     adf_data = adf_data | (adf_MOD << 3);
     adf_data = adf_data | ADF_R1;
-    ADF4351_Write(adf_data);
+    adf4351_write(adf_data);
 
     //配置寄存器0
     adf_data = 0x00000000;
     adf_data = adf_data | (adf_INT << 15);
     adf_data = adf_data | (adf_FRAC << 3);
     adf_data = adf_data | ADF_R0;
-    ADF4351_Write(adf_data);
+    adf4351_write(adf_data);
 }
 
 #include <stdlib.h>
@@ -343,12 +352,12 @@ void adf4351_test(int argc, char** argv)
     {
         uint32_t freq = atoi(argv[1]);
         log_d("input freq: %d MHz", freq / 1000);
+        // freq *= 1000;
         adf4351_set_freq(freq);
     }
     else
     {
         log_w("lost argv, like \"adf_freq 200000 \"");
-    }   
+    }
 }
-MSH_CMD_EXPORT_ALIAS(adf4351_test, adf_freq, freq x 1000: adf_freq <freq>);
-
+MSH_CMD_EXPORT_ALIAS(adf4351_test, adf_freq, freq x 1000 : adf_freq<freq>);
