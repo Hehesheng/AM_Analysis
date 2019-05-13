@@ -34,28 +34,32 @@ void hmi_thread(void *parameter)
         /* 接受开始符 */
         if (tmp == 0xFE)
         {
-            if (rt_sem_take(hmi_sem, RT_TICK_PER_SECOND) == RT_ETIMEOUT)
+            while (1)
             {
-                log_w("Rec 0xFF timeout.");
-                rt_memset(rx_buff, 0, i);
-                i = 0;
-                continue;
-            }
-            rt_device_read(serial, 0, rx_buff + i, 1);
-            /* 接收到终止符 */
-            if (rx_buff[i] == 0xFF)
-            {
-                rx_buff[i] = 0;
-                /* 运行指令 */
-                if (hmi_cmd_run(rx_buff) == RT_NULL)
+                if (rt_sem_take(hmi_sem, RT_TICK_PER_SECOND) == RT_ETIMEOUT)
                 {
-                    log_w("Error command.");
+                    log_w("Rec 0xFF timeout.");
+                    rt_memset(rx_buff, 0, i);
+                    i = 0;
+                    break;
                 }
-                rt_memset(rx_buff, 0, i);
-                i = 0;
-                continue;
+                rt_device_read(serial, 0, rx_buff + i, 1);
+                /* 接收到终止符 */
+                if (rx_buff[i] == 0xFF)
+                {
+                    rx_buff[i] = 0;
+                    /* 运行指令 */
+                    log_d("[HMI DEBUG]: %s\n", rx_buff);
+                    if (hmi_cmd_run(rx_buff) == RT_NULL)
+                    {
+                        log_w("Error command.");
+                    }
+                    rt_memset(rx_buff, 0, i);
+                    i = 0;
+                    break;
+                }
+                i++;
             }
-            i++;
         }
     }
 }

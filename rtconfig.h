@@ -136,7 +136,7 @@
 
 /* POSIX layer and C standard library */
 
-/* RT_USING_LIBC is not set */
+#define RT_USING_LIBC
 /* RT_USING_PTHREADS is not set */
 
 /* Network */
@@ -183,7 +183,7 @@
 
 /* log format */
 
-/* ULOG_OUTPUT_FLOAT is not set */
+#define ULOG_OUTPUT_FLOAT
 #define ULOG_USING_COLOR
 #define ULOG_OUTPUT_TIME
 /* ULOG_TIME_USING_TIMESTAMP is not set */

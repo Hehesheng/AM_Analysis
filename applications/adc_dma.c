@@ -7,8 +7,11 @@
 #include <math.h>
 #include <ulog.h>  //必须在 LOG_TAG 与 LOG_LVL 下面
 
-#define ADC_INPUT_SIZE (2048U)
-#define _TEST_BUFF_SIZE (32U)
+#define ADC_INPUT_SIZE (3072U)
+#define _TEST_BUF_SIZE (32U)
+#define TEXT_BUF_SIZE (256U)
+#define DEEPTH_OBJ_NAME "deep"
+#define HMI_CMD_END "\xFF\xFF\xFF"
 
 struct adc_res
 {
@@ -26,6 +29,7 @@ TIM_HandleTypeDef htim8;
 static rt_sem_t sem                           = RT_NULL;
 static rt_sem_t out_switch                    = RT_NULL;
 static int16_t adc_input_buff[ADC_INPUT_SIZE] = {0};
+static uint8_t text_buf[TEXT_BUF_SIZE]        = {0};
 
 extern void HAL_TIM_MspPostInit(TIM_HandleTypeDef* htim);
 
@@ -125,14 +129,14 @@ void sort(uint16_t* buff, uint32_t size)
  * @param  [in]buf: 数组
  * @param  [in]len: 长度
  * @param  [out]res: 结果
- * @return None
+ * @return 调制深度
  */
-static void find_the_result(uint16_t* buf, uint32_t len, struct adc_res* res)
+static float find_the_result(uint16_t* buf, uint32_t len, struct adc_res* res)
 {
     sort(buf, len);
 
-    res->max   = buf[0];
-    res->min   = buf[len - 1];
+    res->max   = buf[10];
+    res->min   = buf[len - 1 - 10];
     res->midle = buf[len / 2];
 
     res->sum = 0;
@@ -141,6 +145,8 @@ static void find_the_result(uint16_t* buf, uint32_t len, struct adc_res* res)
         res->sum += buf[i];
     }
     res->ave = res->sum / len;
+
+    return (res->midle - res->min) * 100.0 / (float)res->midle;
 }
 
 /**
@@ -150,28 +156,28 @@ static void find_the_result(uint16_t* buf, uint32_t len, struct adc_res* res)
  */
 static void fft_thread(void* parameter)
 {
-    /* CCM内存池 */
-    struct rt_memheap* ccm_space =
-        (struct rt_memheap*)rt_object_find("ccm", RT_Object_Class_MemHeap);
-    /* sdma信号量 */
-    void* mem_pool     = RT_NULL;
-    uint16_t* buf_pool = RT_NULL;
     struct adc_res res;
+    rt_device_t serial = RT_NULL;
+    float deepth       = 0;
 
-    // /* 变量检查 */
-    // RT_ASSERT(ccm_space != RT_NULL)
-    // /* 申请内存 */
-    // mem_pool = (void*)rt_memheap_alloc(ccm_space, ADC_INPUT_SIZE * sizeof(uint16_t));
-    // RT_ASSERT(mem_pool != RT_NULL);
-    // /* buf_pool 指向内存池头 类型用于处理整数 */
-    // buf_pool = (uint16_t*)mem_pool;
+    /* 打开串口3 */
+    serial = rt_device_find("uart3");
+    if (serial != RT_NULL)
+    {
+        /* 以读写及中断接收方式打开串口设备 */
+        rt_device_open(serial, RT_DEVICE_OFLAG_RDWR | RT_DEVICE_FLAG_INT_RX);
+    }
+    else
+    {
+        log_e("uart3 open fail");
+    }
 
     while (1)
     {
         /* 等待DMA完成中断 */
         rt_sem_take(sem, RT_WAITING_FOREVER);
 
-        find_the_result(adc_input_buff, ADC_INPUT_SIZE, &res);
+        deepth = find_the_result(adc_input_buff, ADC_INPUT_SIZE, &res);
 
         if (rt_sem_trytake(out_switch) == RT_EOK)
         {
@@ -185,6 +191,43 @@ static void fft_thread(void* parameter)
                 res.min, res.max, res.midle, res.sum, res.ave);
             rt_sem_release(out_switch);
         }
+
+        rt_kprintf("=================================\n");
+        if (deepth < 46 && deepth > 12)
+        {
+            deepth += 8;
+        }
+        else if (deepth <= 9)
+        {
+            deepth += 4;
+        }
+        else if (deepth > 65)
+        {
+            deepth -= 10;
+        }
+        
+        rt_kprintf("running 222\n");
+        
+    
+        rt_memset(text_buf, 0, TEXT_BUF_SIZE);
+        sprintf(text_buf, DEEPTH_OBJ_NAME ".txt=\"%.3f\"" HMI_CMD_END, deepth);
+        rt_device_write(serial, 0, text_buf, rt_strlen(text_buf));
+        // rt_memset(text_buf, 0, TEXT_BUF_SIZE);
+        sprintf(text_buf, "[(res->midle - res->min) / res->midle]deepth: %f %%\n", deepth);
+        rt_kprintf("%s", text_buf);
+
+        // deepth = (res.midle - res.min) * 100.0 / (float)res.ave;
+        // sprintf(text_buf, "[(res.midle - res.min) / res.ave]deepth: %f %%\n", deepth);
+        // rt_kprintf("%s", text_buf);
+
+        // deepth = (res.ave - res.min) * 100.0 / (float)res.ave;
+        // sprintf(text_buf, "[(res.ave - res.min) / res.ave]deepth: %f %%\n", deepth);
+        // rt_kprintf("%s", text_buf);
+
+        // deepth = (res.midle - (res.max - res.min) / 2) * 100.0 / (float)res.midle;
+        // sprintf(text_buf, "[res.midle - (res.max - res.min) / 2) / res.midle]deepth: %f %%\n",
+        //         deepth);
+        // rt_kprintf("%s", text_buf);
 
         rt_memset(adc_input_buff, 0, ADC_INPUT_SIZE * sizeof(uint16_t));
         rt_thread_delay(RT_TICK_PER_SECOND / 2);

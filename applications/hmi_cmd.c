@@ -3,12 +3,13 @@
 #include <string.h>
 
 /* User Cmd List */
+extern void adf4351_hmi_handle(char *argv);
 
 static hmi_cmd _cmd_list[] = {
     {
-        .cmd          = "pwm",
+        .cmd          = "freq",
         .argv         = NULL,
-        .event_handle = NULL,
+        .event_handle = adf4351_hmi_handle,
     },
 };
 
@@ -30,11 +31,7 @@ hmi_cmd_t hmi_cmd_analysis(char *cmd)
     {
         return res;
     }
-    len = strlen(cmd);
-    if (hmi_assert(len > CMD_HEAD_MAX_LEN))
-    {
-        return res;
-    }
+
     /* 获取命令头 */
     while ((*(cmd + i) != ' ' && *(cmd + i) != '=') && (i < CMD_HEAD_MAX_LEN))
     {
@@ -42,6 +39,12 @@ hmi_cmd_t hmi_cmd_analysis(char *cmd)
         i++;
     }
     cmd_head[i++] = '\0';
+    len = strlen(cmd_head);
+    if (hmi_assert(len <= CMD_HEAD_MAX_LEN))
+    {
+        return res;
+    }
+
     tmp_argv      = cmd + i; /* 获取参数指针 */
 
     /* 遍历查找 */

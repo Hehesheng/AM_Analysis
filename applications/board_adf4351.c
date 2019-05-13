@@ -10,7 +10,7 @@
 
 #define FREQ_TO_MHZ(x) (x * 1000)
 #define FREQ_TO_KHZ(x) (x)
-#define START_INIT_FREQ (90001)
+#define START_INIT_FREQ (88000)
 
 // uint32_t adf_R        = 1;  // RF参考分频系数
 // uint32_t adf_D        = 0;  // RF REFin倍频器位(0 or 1)
@@ -391,5 +391,17 @@ static void adf4351_test(int argc, char** argv)
 }
 MSH_CMD_EXPORT_ALIAS(adf4351_test, adf_freq, freq Mhz : adf_freq<freq>);
 
-static void adf4351_init_test(void) { adf4351_init(); }
-MSH_CMD_EXPORT_ALIAS(adf4351_init_test, adf_init, testesetss);
+void adf4351_hmi_handle(char *argv)
+{
+    uint32_t freq = 0;
+
+    freq = atoi(argv);
+    freq += 18000;
+
+    if (freq > 35000 && freq < 4400000)
+    {
+        adf4351_set_freq(freq);
+        log_d("rec from hmi freq=%d MHz", freq / 1000);
+    }
+}
+
